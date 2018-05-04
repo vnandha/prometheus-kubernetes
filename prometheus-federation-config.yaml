@@ -1,0 +1,74 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-k8s-federation-config
+data:
+  prometheus-federation.yaml: |
+    global:
+      scrape_interval: 60s
+      scrape_timeout: 60s
+      evaluation_interval: 60s
+
+      # Attach these labels to any time series or alerts when communicating with
+      # external systems (federation, remote storage, Alertmanager).
+      external_labels:
+        monitor: 'prometheus-k8s-federation'
+
+    # Rule files specifies a list of globs. Rules and alerts are read from
+    # all matching files.
+    rule_files:
+      - '/etc/prometheus/rules/*.rules'
+
+    # A scrape configuration containing exactly one endpoint to scrape:
+    # Here it's Prometheus itself.
+    scrape_configs:
+      # The job name is added as a label `job=<job_name>` to any timeseries scraped from this config.
+      - job_name: 'prometheus'
+
+        # Override the global default and scrape targets from this job every 5 seconds.
+        scrape_interval: 5s
+
+        static_configs:
+          - targets: ['localhost:9090']
+        relabel_configs:
+        - target_label: colo
+          action: replace
+          replacement: federation
+
+      - job_name: 'federate'
+
+        honor_labels: true
+        metrics_path: '/federate'
+
+        params:
+          'match[]':
+            - '{job="prometheus"}'
+            - '{app="kube-state-metrics"}'
+            - '{job="kubernetes-etcd"}'
+            - '{job="kube-dns"}'
+            - '{job="kubernetes-scheduler"}'
+            - '{job="kubernetes-controller"}'
+            - '{job="kubernetes-nodes"}'
+            - '{job="kubernetes-apiservers"}'
+            - '{__name__=~"cluster.*"}'
+            - '{__name__=~"colo.*"}'
+            - '{kubernetes_name="heapster"}'
+
+        static_configs:
+          - targets:
+            - 'prometheus.%ENVIRONMENT%.colo1:9090'
+            - 'prometheus.%ENVIRONMENT%.colo2:9090'
+            - 'prometheus.%ENVIRONMENT%.colo3:9090'
+            - 'prometheus.%ENVIRONMENT%.colo4:9090'
+            - 'prometheus.%ENVIRONMENT%.colo5:9090'
+            - 'prometheus.%ENVIRONMENT%.colo6:9090
+
+    alerting:
+      alertmanagers:
+        - kubernetes_sd_configs:
+          - role: service
+          relabel_configs:
+          - source_labels: [__meta_kubernetes_service_name]
+            action: keep
+            regex: alertmanager-federation
+            target_label: kubernetes_name

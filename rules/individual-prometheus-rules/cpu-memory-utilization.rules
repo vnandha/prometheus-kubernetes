@@ -1,0 +1,84 @@
+groups:
+- name: ./cpu-memory-utilization.rules
+  rules:
+  # colo level cpu utilization
+  - record: colo:cpu_percentage:rate
+    expr: 100 * sum(label_replace(irate(container_cpu_usage_seconds_total{container_name!="", container_name!="POD"}[5m]),
+      "controller", "$1", "pod_name", "^(.*)-[a-z0-9]+")) BY (colo) /
+      sum(label_replace(container_spec_cpu_shares{container_name!="", container_name!="POD"},
+      "controller", "$1", "pod_name", "^(.*)-[a-z0-9]+")) BY (colo) * 1000
+  # namespace level cpu utilization
+  - record: colo_namespace:cpu_percentage:rate
+    expr: 100 * sum(label_replace(irate(container_cpu_usage_seconds_total{container_name!="", container_name!="POD"}[5m]),
+      "controller", "$1", "pod_name", "^(.*)-[a-z0-9]+")) BY (colo, namespace) /
+      sum(label_replace(container_spec_cpu_shares{container_name!="", container_name!="POD"},
+      "controller", "$1", "pod_name", "^(.*)-[a-z0-9]+")) BY (colo, namespace) * 1000
+  # controller level cpu utilization
+  - record: colo_namespace_controller:cpu_percentage:rate
+    expr: 100 * sum(label_replace(irate(container_cpu_usage_seconds_total{container_name!="", container_name!="POD"}[5m]),
+      "controller", "$1", "pod_name", "^(.*)-[a-z0-9]+")) BY (colo, namespace, controller) /
+      sum(label_replace(container_spec_cpu_shares{container_name!="", container_name!="POD"},
+      "controller", "$1", "pod_name", "^(.*)-[a-z0-9]+")) BY (colo, namespace, controller) * 1000
+  # pod level cpu utilization
+  - record: colo_namespace_controller_pod:cpu_percentage:rate
+    expr: 100 * sum(label_replace(irate(container_cpu_usage_seconds_total{container_name!="", container_name!="POD"}[5m]),
+      "controller", "$1", "pod_name", "^(.*)-[a-z0-9]+")) BY (colo, namespace, controller, pod_name) /
+      sum(label_replace(container_spec_cpu_shares{container_name!="", container_name!="POD"},
+      "controller", "$1", "pod_name", "^(.*)-[a-z0-9]+")) BY (colo, namespace, controller, pod_name) * 1000
+  # container level cpu utilization
+  - record: colo_namespace_controller_pod_container:cpu_percentage:rate
+    expr: 100 * sum(label_replace(irate(container_cpu_usage_seconds_total{container_name!="", container_name!="POD"}[5m]),
+      "controller", "$1", "pod_name", "^(.*)-[a-z0-9]+")) BY (colo, namespace, controller, pod_name, container_name) /
+      sum(label_replace(container_spec_cpu_shares{container_name!="", container_name!="POD"},
+      "controller", "$1", "pod_name", "^(.*)-[a-z0-9]+")) BY (colo, namespace, controller, pod_name, container_name) * 1000
+
+  # colo level requested cpu cores
+  - record: colo:container_spec_cpu_shares:sum
+    expr: sum(label_replace(container_spec_cpu_shares{container_name!="", container_name!="POD"},
+      "controller", "$1", "pod_name", "^(.*)-[a-z0-9]+")) BY (colo) / 1000
+
+  # colo level allocatable cpu cores
+  - record: colo:kube_node_status_allocatable_cpu_cores:sum
+    expr: sum(kube_node_status_allocatable_cpu_cores and on(node) kube_node_spec_unschedulable == 0
+      and on(node) kube_node_status_condition{condition="Ready", status="true"} == 1) by (colo)
+
+  # colo level memory utilization
+  - record: colo:memory_percentage:rate
+    expr: 100 * sum(container_memory_usage_bytes{container_name!="", container_name!="POD"})
+      BY (colo) /
+      sum(container_spec_memory_limit_bytes{container_name!="", container_name!="POD"})
+      BY (colo)
+  # namespace level memory utilization
+  - record: colo_namespace:memory_percentage:rate
+    expr: 100 * sum(container_memory_usage_bytes{container_name!="", container_name!="POD"})
+      BY (colo, namespace) /
+      sum(container_spec_memory_limit_bytes{container_name!="", container_name!="POD"})
+      BY (colo, namespace)
+  # controller level memory utilization
+  - record: colo_namespace_controller:memory_percentage:rate
+    expr: 100 * sum(label_replace(container_memory_usage_bytes{container_name!="", container_name!="POD"},
+      "controller", "$1", "pod_name", "^(.*)-[a-z0-9]+")) BY (colo, namespace, controller) /
+      sum(label_replace(container_spec_memory_limit_bytes{container_name!="", container_name!="POD"}, "controller", "$1", "pod_name", "^(.*)-[a-z0-9]+"))
+      BY (colo, namespace, controller)
+  # pod level memory utilization
+  - record: colo_namespace_controller_pod:memory_percentage:rate
+    expr: 100 * sum(label_replace(container_memory_usage_bytes{container_name!="", container_name!="POD"},
+      "controller", "$1", "pod_name", "^(.*)-[a-z0-9]+")) BY (colo, namespace, controller, pod_name) /
+      sum(label_replace(container_spec_memory_limit_bytes{container_name!="", container_name!="POD"}, "controller", "$1", "pod_name", "^(.*)-[a-z0-9]+"))
+      BY (colo, namespace, controller, pod_name)
+  # container level memory utilization
+  - record: colo_namespace_controller_pod_container:memory_percentage:rate
+    expr: 100 * sum(label_replace(container_memory_usage_bytes{container_name!="", container_name!="POD"},
+      "controller", "$1", "pod_name", "^(.*)-[a-z0-9]+")) BY (colo, namespace, controller, pod_name, container_name) /
+      sum(label_replace(container_spec_memory_limit_bytes{container_name!="", container_name!="POD"},
+      "controller", "$1", "pod_name", "^(.*)-[a-z0-9]+"))
+      BY (colo, namespace, controller, pod_name, container_name)
+
+  # colo level requested memory
+  - record: colo:kube_pod_container_resource_limits_memory_bytes:sum
+    expr: sum(kube_pod_container_resource_limits_memory_bytes) by (colo)
+
+  # colo level allocatable memory
+  - record: colo:kube_node_status_allocatable_memory_bytes:sum
+    expr: sum(kube_node_status_allocatable_memory_bytes and on(node) kube_node_spec_unschedulable == 0
+      and on(node) kube_node_status_condition{condition="Ready", status="true"} == 1) by (colo)
